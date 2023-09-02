@@ -1,8 +1,6 @@
-// src/controllers/userController.js
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const passport = require("../../config/passportConfig");
 const {
 	getToken,
 	COOKIE_OPTIONS,
@@ -43,11 +41,6 @@ exports.register = async (req, res, next) => {
 						res.statusCode = 500;
 						res.send(err);
 					} else {
-						console.log("User: ", user);
-						user.name = name;
-						user.username = email;
-						user.password = hashedPassword;
-						user.gender = gender;
 						const token = getToken({ _id: user._id });
 						const refreshToken = getRefreshToken({ _id: user._id });
 						user.refreshToken.push({ refreshToken });
@@ -78,106 +71,110 @@ exports.register = async (req, res, next) => {
 };
 
 exports.login = async (req, res, next) => {
+	const user = await User.findOne({ username: req.body.email });
+	if (!user) {
+		res.statusCode = 404;
+		res.send({ message: "User Not Found" });
+		return;
+	}
+	const token = getToken({ _id: user._id });
+	const refreshToken = getRefreshToken({ _id: user._id });
+	User.findById(user._id).then((user) => {
+		user.refreshToken.push({ refreshToken });
+		try {
+			user.save();
 
-	const token = getToken({ _id: req.user._id })
-  const refreshToken = getRefreshToken({ _id: req.user._id })
-  User.findById(req.user._id).then(
-    user => {
-      user.refreshToken.push({ refreshToken })
-      user.save((err, user) => {
-        if (err) {
-          res.statusCode = 500
-          res.send(err)
-        } else {
-          res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS)
-          res.send({ success: true, token })
-        }
-      })
-    },
-    err => next(err)
-  )
-
-	// try {
-	// 	const { email, password } = req.body;
-	// 	// Find the user by email
-	// 	const user = await User.findOne({ email });
-	// 	console.log("User: ", user);
-	// 	if (!user) {
-	// 		return res.status(401).json({ error: "Invalid credentials" });
-	// 	}
-
-	// 	// Compare the provided password with the hashed password in the database
-	// 	const passwordMatch = bcrypt.compareSync(password, user.password);
-	// 	if (!passwordMatch) {
-	// 		console.log("Invalid creds need to bcrypt");
-	// 		return res.status(401).json({ error: "Invalid credentials" });
-	// 	}
-
-	// 	// Generate and send a JWT token
-	// 	const token = jwt.sign({ userId: user._id }, "your-secret-key", {
-	// 		expiresIn: "1h", // Adjust the token expiration time as needed
-	// 	});
-	// 	res.status(200).json({ token });
-	// } catch (error) {
-	// 	console.error(error);
-	// 	res.status(500).json({ error: "Server error" });
-	// }
+			res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS);
+			res.send({ success: true, token });
+		} catch (err) {
+			res.statusCode = 500;
+			res.send(err);
+		}
+	});
 };
 
-// exports.register = async (req, res) => {
-// 	try {
-// 		const { name, email, password, gender } = req.body;
+exports.logout = async (req, res, next) => {
+	try {
+		const { signedCookies = {} } = req;
+		const { refreshToken } = signedCookies;
+		User.findById(req.user._id).then(
+			(user) => {
+				const tokenIndex = user.refreshToken.findIndex(
+					(item) => item.refreshToken === refreshToken
+				);
 
-// 		console.log(req.body);
-// 		// Check if the email is already registered
-// 		const existingUser = await User.findOne({ email });
+				if (tokenIndex !== -1) {
+					user.refreshToken.id(user.refreshToken[tokenIndex]._id).remove();
+				}
 
-// 		if (existingUser) {
-// 			return res.status(400).json({ error: "Email already in use" });
-// 		} else {
-// 			// Hash the password
-// 			const hashedPassword = await bcrypt.hashSync(password, 10);
+				try {
+					user.save();
 
-// 			// Create a new user
-// 			const user = new User({ name, email, password: hashedPassword, gender });
-// 			await user.save();
-// 			res.json({ message: "User Created Successfully!" });
+					res.clearCookie("refreshToken", COOKIE_OPTIONS);
+					res.send({ success: true });
+				} catch (err) {
+					res.statusCode = 500;
+					res.send(err);
+				}
+			},
+			(err) => next(err)
+		);
+	} catch (err) {
+		res.statusCode = 400;
+		res.send(err);
+	}
+};
 
-// 			// Generate and send a JWT token
-// 			// const token = jwt.sign({ userId: user._id }, 'your-secret-key');
-// 			// res.json({ token });
-// 		}
-// 	} catch (error) {
-// 		console.error(error);
-// 		res.status(500).json({ error: "Server error" });
-// 	}
-// };
+exports.refreshToken = async (req, res, next) => {
+	const { signedCookies = {} } = req;
+	const { refreshToken } = signedCookies;
 
-// exports.login = async (req, res) => {
-// 	return res.status(200);
-// 	try {
-// 		const { email, password } = req.body;
-// 		// Find the user by email
-// 		const user = await User.findOne({ email });
-// 		console.log("User: ", user);
-// 		if (!user) {
-// 			return res.status(401).json({ error: "Invalid credentials" });
-// 		}
+	if (refreshToken) {
+		try {
+			const payload = jwt.verify(
+				refreshToken,
+				process.env.REFRESH_TOKEN_SECRET
+			);
+			const userId = payload._id;
+			User.findOne({ _id: userId }).then(
+				(user) => {
+					if (user) {
+						// Find the refresh token against the user record in database
+						const tokenIndex = user.refreshToken.findIndex(
+							(item) => item.refreshToken === refreshToken
+						);
 
-// 		// Compare the provided password with the hashed password in the database
-// 		const passwordMatch = bcrypt.compareSync(password, user.password);
-// 		if (!passwordMatch) {
-// 			console.log("Invalid creds need to bcrypt");
-// 			return res.status(401).json({ error: "Invalid credentials" });
-// 		}
+						if (tokenIndex === -1) {
+							res.statusCode = 401;
+							res.send("Unauthorized");
+						} else {
+							const token = getToken({ _id: userId });
+							// If the refresh token exists, then create new one and replace it.
+							const newRefreshToken = getRefreshToken({ _id: userId });
+							user.refreshToken[tokenIndex] = { refreshToken: newRefreshToken };
+							try {
+								user.save();
 
-// 		// Generate and send a JWT token
-// 		const token = jwt.sign({ userId: user._id }, "your-secret-key", {
-// 			expiresIn: "1h", // Adjust the token expiration time as needed
-// 		});
-// 		res.status(200).json({ token });
-// 	} catch (error) {
-// 		console.error(error);
-// 		res.status(500).json({ error: "Server error" });
-// 	}
-// };
+								res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS);
+								res.send({ success: true, token });
+							} catch (err) {
+								res.statusCode = 500;
+								res.send(err);
+							}
+						}
+					} else {
+						res.statusCode = 401;
+						res.send("Unauthorized");
+					}
+				},
+				(err) => next(err)
+			);
+		} catch (err) {
+			res.statusCode = 401;
+			res.send("Unauthorized");
+		}
+	} else {
+		res.statusCode = 401;
+		res.send("Unauthorized");
+	}
+};
