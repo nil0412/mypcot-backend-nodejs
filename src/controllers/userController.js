@@ -93,32 +93,57 @@ exports.login = async (req, res, next) => {
 	});
 };
 
+exports.currentUser = async (req, res, next) => {
+	// Use .exec() to execute the query and retrieve the user
+    req.user
+      .exec()
+      .then((user) => {
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        // Send the user data as the response
+        res.json(user);
+      })
+      .catch((err) => {
+        console.error(err);
+        res.status(500).json({ message: "Internal server error" });
+      });
+}
+
 exports.logout = async (req, res, next) => {
 	try {
 		const { signedCookies = {} } = req;
 		const { refreshToken } = signedCookies;
-		User.findById(req.user._id).then(
-			(user) => {
-				const tokenIndex = user.refreshToken.findIndex(
-					(item) => item.refreshToken === refreshToken
-				);
+		req.user.exec().then((user) => {
+			const tokenIndex = user.refreshToken.findIndex(
+				(item) => item.refreshToken === refreshToken
+			);
 
-				if (tokenIndex !== -1) {
-					user.refreshToken.id(user.refreshToken[tokenIndex]._id).remove();
-				}
+			if (tokenIndex !== -1) {
+				// user.refreshToken.id(user.refreshToken[tokenIndex]._id).remove();
 
 				try {
+					// Remove the refreshToken from the array
+					user.refreshToken.splice(tokenIndex, 1);
+
 					user.save();
 
 					res.clearCookie("refreshToken", COOKIE_OPTIONS);
-					res.send({ success: true });
+					res.json({
+						success: true,
+						message: "Refresh token removed successfully",
+					});
 				} catch (err) {
 					res.statusCode = 500;
-					res.send(err);
+					res.json({ message: "Error saving user", Error: err });
 				}
-			},
-			(err) => next(err)
-		);
+			}else{
+				res.json({
+					success: true,
+					message: "Refresh token does not exists",
+				});
+			}
+		});
 	} catch (err) {
 		res.statusCode = 400;
 		res.send(err);

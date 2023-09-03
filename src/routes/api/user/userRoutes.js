@@ -8,14 +8,10 @@ const { verifyUser } = require("../../../../authenticate");
 
 router.post("/register", userController.register);
 router.post("/login", passport.authenticate("local"), userController.login);
-router.get("/logout", userController.logout);
+router.get("/logout", passport.authenticate("jwt", { session: false }), userController.logout);
 router.post("/refreshToken", userController.refreshToken);
 
 // logged in user details
-router.get("/me", verifyUser, (req, res, next) => {
-	const safeJSON = CircularJSON.stringify(req.user);
-	res.send(safeJSON);
-    // res.send(req.user);
-});
+router.get("/currentUser", passport.authenticate("jwt", { session: false }), userController.currentUser);
 
 module.exports = router;
