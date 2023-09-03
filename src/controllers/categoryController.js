@@ -1,3 +1,5 @@
+const Category = require("../models/Category");
+
 exports.get = async (req, res, next) => {
     try {
 		const categories = await Category.find({}, "name");
