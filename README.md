@@ -7,7 +7,7 @@ Used nodejs and Passport-local for authentication
 
 ## Environment Variables
 
-To run this project, you will need to add the following environment variables to your .env file
+To run this project, you will need to add the following environment variables to your .env file (at room location)
 
 `REFRESH_TOKEN_SECRET = fgkjddshfdjh773bdjsj84-jdjd774`
 `SESSION_EXPIRY = 60*15`
