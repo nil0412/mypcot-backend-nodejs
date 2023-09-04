@@ -5,7 +5,7 @@ const passport = require("passport");
 const categoryController = require('../../../controllers/categoryController');
 
 
-router.get("/", categoryController.get);
+router.get("/", passport.authenticate("jwt", { session: false }), categoryController.get);
 
 router.post("/", passport.authenticate("jwt", { session: false }), categoryController.post);
 
